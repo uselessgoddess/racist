@@ -1,7 +1,9 @@
-use crate::data::{CanHit, Hit, Ray, Surface, Three};
-use num_traits::Float;
-use rand::Rng;
-use rand_distr::{uniform::SampleUniform, Distribution, Standard};
+use {
+    crate::data::{CanHit, Hit, Ray, Surface, Three},
+    num_traits::Float,
+    rand::Rng,
+    rand_distr::{uniform::SampleUniform, Distribution, Standard},
+};
 
 #[derive(Debug, Clone)]
 pub struct Triangle<F> {
@@ -12,14 +14,10 @@ pub struct Triangle<F> {
 
 impl<F> Triangle<F>
 where
-    F: Float,
+    F: Dtype,
 {
     pub fn new(v0: Three<F>, v1: Three<F>, v2: Three<F>) -> Self {
-        Self {
-            v0,
-            v01: v1 - v0,
-            v02: v2 - v0,
-        }
+        Self { v0, v01: v1 - v0, v02: v2 - v0 }
     }
 
     /// Constructs an equialateral triangle around the origin with the normal facing the positive z axis
@@ -28,20 +26,12 @@ where
         Self::new(
             Three::new(F::from(-0.5f64).unwrap(), F::zero(), F::zero()),
             Three::new(F::from(0.5f64).unwrap(), F::zero(), F::zero()),
-            Three::new(
-                F::zero(),
-                F::from(3.0f64.sqrt() / 2.0f64).unwrap(),
-                F::zero(),
-            ),
+            Three::new(F::zero(), F::from(3.0f64.sqrt() / 2.0f64).unwrap(), F::zero()),
         )
     }
 
     pub fn shifted(&self, offset: Three<F>) -> Self {
-        Self {
-            v0: self.v0 + offset,
-            v01: self.v01,
-            v02: self.v02,
-        }
+        Self { v0: self.v0 + offset, v01: self.v01, v02: self.v02 }
     }
 
     pub fn scaled(&self, scalar: F) -> Self {
@@ -68,7 +58,7 @@ where
 
 impl<F> CanHit<Triangle<F>, F> for Ray<F>
 where
-    F: Float,
+    F: Dtype,
 {
     // source: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection
     fn shoot_at(&self, triangle: &Triangle<F>, t_min: F, t_max: F) -> Option<Hit<F>> {
@@ -98,18 +88,13 @@ where
         }
         let position = self.origin + self.direction * distance;
         let normal = triangle.normal();
-        Some(Hit {
-            position,
-            distance,
-            normal,
-            object_index: 0,
-        })
+        Some(Hit { position, distance, normal, object_index: 0 })
     }
 }
 
 impl<F> Surface<F> for Triangle<F>
 where
-    F: Float + SampleUniform,
+    F: Dtype + SampleUniform,
     Standard: Distribution<F>,
 {
     fn sample_point_on_surface<R: Rng>(&self, rng: &mut R) -> Three<F> {

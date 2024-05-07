@@ -1,8 +1,10 @@
-use super::triangle::Triangle;
-use crate::data::{CanHit, Hit, Ray, Surface, Three};
-use num_traits::Float;
-use rand::prelude::{Rng, SliceRandom};
-use rand_distr::{uniform::SampleUniform, Distribution, Standard};
+use {
+    super::triangle::Triangle,
+    crate::data::{CanHit, Hit, Ray, Surface, Three},
+    num_traits::Float,
+    rand::prelude::{Rng, SliceRandom},
+    rand_distr::{uniform::SampleUniform, Distribution, Standard},
+};
 
 #[derive(Debug, Clone)]
 pub struct Prism<F> {
@@ -11,7 +13,7 @@ pub struct Prism<F> {
 
 impl<F> Prism<F>
 where
-    F: Float,
+    F: Dtype,
 {
     /// Constructs a prism with equilateral triangle ends, and length 1.0 sides facing the positive z axis
     pub fn unit_facing_pos_z() -> Self {
@@ -42,9 +44,7 @@ where
         assert!(tri5.normal().dot(&tri6.normal()) > F::zero());
         assert!(tri7.normal().dot(&tri8.normal()) > F::zero());
 
-        Self {
-            triangles: [tri1, tri2, tri3, tri4, tri5, tri6, tri7, tri8],
-        }
+        Self { triangles: [tri1, tri2, tri3, tri4, tri5, tri6, tri7, tri8] }
     }
 
     fn center(&self) -> Three<F> {
@@ -73,7 +73,7 @@ where
 
 impl<F> CanHit<Prism<F>, F> for Ray<F>
 where
-    F: Float,
+    F: Dtype,
 {
     fn shoot_at(&self, prism: &Prism<F>, t_min: F, mut t_max: F) -> Option<Hit<F>> {
         let mut opt_hit = None;
@@ -92,14 +92,11 @@ where
 
 impl<F> Surface<F> for Prism<F>
 where
-    F: Float + SampleUniform,
+    F: Dtype + SampleUniform,
     Standard: Distribution<F>,
 {
     fn sample_point_on_surface<R: Rng>(&self, rng: &mut R) -> Three<F> {
-        self.triangles
-            .choose(rng)
-            .unwrap()
-            .sample_point_on_surface(rng)
+        self.triangles.choose(rng).unwrap().sample_point_on_surface(rng)
     }
 
     fn normal_at_point(&self, _point: &Three<F>) -> Three<F> {

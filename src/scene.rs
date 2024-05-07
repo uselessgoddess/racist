@@ -1,21 +1,20 @@
-use crate::{
-    data::{CanHit, Hit, Material, Ray, Three},
-    shapes::Object,
+use {
+    crate::{shapes::Sphere, Dtype, Hit, Hitee, Material, Ray, Vec3},
+    num_traits::Float,
+    rand::Rng,
 };
-use num_traits::Float;
-use rand::Rng;
 
-pub trait SceneTracer<F> {
-    fn trace<R>(&self, ray: Ray<F>, scene: &Scene<F>, rng: &mut R) -> Option<Three<F>>
-    where
-        R: Rng;
+pub trait Tracer<F> {
+    fn trace<R: Rng>(&self, ray: Ray<F>, scene: &Scene<F>, rng: &mut R) -> Option<Vec3<F>>;
 }
+
+type Object<F> = Sphere<F>;
 
 pub struct Scene<F> {
     objects: Vec<Object<F>>,
-    emissive_objects: Vec<(usize, Object<F>)>,
-    object_material_idx: Vec<MaterialIdx>,
+    emissions: Vec<(usize, Object<F>)>,
     materials: Vec<Material<F>>,
+    materials_sparse: Vec<MaterialIdx>,
 }
 
 impl<F> Scene<F>
@@ -25,50 +24,48 @@ where
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
-            emissive_objects: Vec::new(),
-            object_material_idx: Vec::new(),
+            emissions: Vec::new(),
             materials: Vec::new(),
+            materials_sparse: Vec::new(),
         }
     }
 
-    pub fn add_material<M: Into<Material<F>>>(&mut self, material: M) -> MaterialIdx {
+    pub fn material<M: Into<Material<F>>>(&mut self, material: M) -> MaterialIdx {
         let idx = MaterialIdx(self.materials.len());
         self.materials.push(material.into());
         idx
     }
 
-    pub fn add_object<O: Into<Object<F>>>(&mut self, obj: O, mat_idx: MaterialIdx) {
-        let obj = obj.into();
-        let obj_idx = self.objects.len();
-        self.objects.push(obj.clone());
-        self.object_material_idx.push(mat_idx);
-        if self.material_for(obj_idx).is_emissive() {
-            self.emissive_objects.push((obj_idx, obj));
+    pub fn object<O: Into<Object<F>>>(&mut self, object: O, mat_idx: MaterialIdx) -> &mut Self {
+        let object = object.into();
+        let idx = self.objects.len();
+
+        self.objects.push(object.clone());
+        self.materials_sparse.push(mat_idx);
+        if self.material_for(idx).is_emission() {
+            self.emissions.push((idx, object));
         }
+        self
     }
 
     pub fn material_for(&self, obj_idx: usize) -> &Material<F> {
-        let mat_idx = self.object_material_idx[obj_idx];
-        &self.materials[mat_idx.0]
+        &self.materials[self.materials_sparse[obj_idx].0]
     }
 
-    pub fn emissive_objects(&self) -> &[(usize, Object<F>)] {
-        &self.emissive_objects
+    pub fn emissions(&self) -> &[(usize, Object<F>)] {
+        &self.emissions
     }
 }
 
-impl<F> CanHit<Scene<F>, F> for Ray<F>
-where
-    F: Float,
-{
-    fn shoot_at(&self, scene: &Scene<F>, t_min: F, mut t_max: F) -> Option<Hit<F>> {
+impl<F: Dtype> Hitee<F> for Scene<F> {
+    fn shoot_at(&self, ray: Ray<F>, t_min: F, mut t_max: F) -> Option<Hit<F>> {
         let mut opt_hit = None;
-        for (i, obj) in scene.objects.iter().enumerate() {
-            if let Some(mut hit) = self.shoot_at(obj, t_min, t_max) {
-                if hit.distance < t_max {
-                    hit.object_index = i;
+        for (idx, obj) in self.objects.iter().enumerate() {
+            if let Some(mut hit) = obj.shoot_at(ray, t_min, t_max) {
+                if hit.len < t_max {
+                    hit.obj_idx = idx;
                     opt_hit = Some(hit);
-                    t_max = hit.distance;
+                    t_max = hit.len;
                 }
             }
         }

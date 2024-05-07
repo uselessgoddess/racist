@@ -1,6 +1,8 @@
-use crate::data::{CanHit, Hit, Ray, Surface, Three};
-use num_traits::Float;
-use rand::Rng;
+use {
+    crate::data::{CanHit, Hit, Ray, Surface, Three},
+    num_traits::Float,
+    rand::Rng,
+};
 
 #[derive(Debug, Clone)]
 pub struct Plane<F> {
@@ -10,7 +12,7 @@ pub struct Plane<F> {
 
 impl<F> Plane<F>
 where
-    F: Float,
+    F: Dtype,
 {
     pub fn facing_pos_x() -> Self {
         Self::new(Three::new(F::one(), F::zero(), F::zero()))
@@ -37,23 +39,17 @@ where
     }
 
     pub fn new(normal: Three<F>) -> Self {
-        Self {
-            center: Three::zeros(),
-            normal: normal.normalized(),
-        }
+        Self { center: Three::zeros(), normal: normal.normalized() }
     }
 
     pub fn shifted_back(&self, dist: F) -> Self {
-        Self {
-            center: self.center - self.normal * dist,
-            normal: self.normal,
-        }
+        Self { center: self.center - self.normal * dist, normal: self.normal }
     }
 }
 
 impl<F> CanHit<Plane<F>, F> for Ray<F>
 where
-    F: Float,
+    F: Dtype,
 {
     fn shoot_at(&self, plane: &Plane<F>, t_min: F, t_max: F) -> Option<Hit<F>> {
         let denom = plane.normal.dot(&self.direction);
@@ -63,19 +59,14 @@ where
             .map(|distance| {
                 let offset = &self.direction * distance;
                 let position = &self.origin + &offset;
-                Hit {
-                    position,
-                    distance,
-                    normal: plane.normal,
-                    object_index: 0,
-                }
+                Hit { position, distance, normal: plane.normal, object_index: 0 }
             })
     }
 }
 
 impl<F> Surface<F> for Plane<F>
 where
-    F: Float,
+    F: Dtype,
 {
     fn sample_point_on_surface<R: Rng>(&self, _rng: &mut R) -> Three<F> {
         todo!("sample random offset... could be infinitely far from center")
