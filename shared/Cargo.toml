@@ -1,0 +1,9 @@
+[package]
+name = "shared"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+spirv-std = { version = "0.9"}
+bytemuck = { version = "1.13", features = ["derive"] }
+glam = { version = "0.24.0", default-features = false, features = ["bytemuck"] }
