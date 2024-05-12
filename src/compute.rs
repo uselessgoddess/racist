@@ -2,7 +2,8 @@ use {
     crate::block_on,
     glam::{UVec2, Vec2, Vec4},
     gpgpu::{
-        BufOps, DescriptorSet, GpuBuffer, GpuBufferUsage, GpuUniformBuffer, Kernel, Program, Shader,
+        BufOps, DescriptorSet, GpuBuffer, GpuBufferUsage, GpuUniformBuffer, Kernel, Program,
+        Sampler, SamplerFilterMode, SamplerWrapMode, Shader,
     },
     image::{io::Reader, RgbaImage},
     rand::Rng,
@@ -21,7 +22,7 @@ use {
 };
 
 lazy_static::lazy_static! {
-    static ref FW: gpgpu::Framework = gpgpu::Framework::default();
+    pub static ref FW: gpgpu::Framework = gpgpu::Framework::default();
     pub static ref BLUE_TEXTURE: RgbaImage = {
         Reader::new(Cursor::new(BLUE_NOISE)).with_guessed_format().unwrap().decode().unwrap().into_rgba8()
     };
@@ -193,10 +194,10 @@ impl<'a> Wgpu<'a> {
         Wgpu { dev, que, surface, format, pipeline, compute_handle: None }
     }
 
-    pub fn redraw(&self, buf: &[f32]) {
+    pub fn redraw(&self, buf: &[f32], width: u32, height: u32) {
         let Ok(frame) = self.surface.get_current_texture() else { return };
 
-        self.pipeline.prepare(&self.que, &buf, 1280, 720);
+        self.pipeline.prepare(&self.que, &buf, width, height);
 
         let mut command_encoder =
             self.dev.create_command_encoder(&CommandEncoderDescriptor::default());
@@ -240,7 +241,10 @@ impl<'a> Wgpu<'a> {
     }
 }
 
-use shared::TracingConfig;
+use {
+    crate::scene::{GpuWorld, World},
+    shared::TracingConfig,
+};
 
 const KERNEL: &[u8] = include_bytes!("k.gen/simple");
 const BLUE_NOISE: &[u8] = include_bytes!("k/blue.png");
@@ -268,18 +272,26 @@ impl<'fw> PathTracing<'fw> {
         config_buf: &GpuUniformBuffer<'fw, TracingConfig>,
         rng_buffer: &GpuBuffer<'fw, UVec2>,
         output_buf: &GpuBuffer<'fw, Vec4>,
+        world: &GpuWorld<'fw>,
     ) -> Self {
         let shader = Shader::from_spirv_bytes(&FW, KERNEL, Some("compute"));
-        // let sampler = Sampler::new(&FW, SamplerWrapMode::ClampToEdge, SamplerFilterMode::Linear);
+        let sampler = Sampler::new(&FW, SamplerWrapMode::ClampToEdge, SamplerFilterMode::Linear);
         let bindings = DescriptorSet::default()
             .bind_uniform_buffer(config_buf)
             .bind_buffer(rng_buffer, GpuBufferUsage::ReadWrite)
-            .bind_buffer(output_buf, GpuBufferUsage::ReadWrite);
+            .bind_buffer(output_buf, GpuBufferUsage::ReadWrite)
+            .bind_buffer(&world.indices, GpuBufferUsage::ReadOnly)
+            .bind_buffer(&world.per_vertex, GpuBufferUsage::ReadOnly)
+            .bind_buffer(&world.bvh.nodes, GpuBufferUsage::ReadOnly)
+            .bind_buffer(&world.materials, GpuBufferUsage::ReadOnly)
+            .bind_buffer(&world.lights, GpuBufferUsage::ReadOnly)
+            .bind_sampler(&sampler)
+            .bind_const_image(&world.atlas);
         Self(Kernel::new(&FW, Program::new(&shader, "main_cs").add_descriptor_set(bindings)))
     }
 }
 
-pub fn trace_gpu(mut state: &mut Tracing, crv: Vec2) -> &[f32] {
+pub fn trace_gpu<'a>(mut state: &'a mut Tracing, world: &GpuWorld<'_>) -> &'a [f32] {
     let TracingConfig { width, height, .. } = state.config;
 
     let pixel_count = (width * height) as usize;
@@ -299,7 +311,10 @@ pub fn trace_gpu(mut state: &mut Tracing, crv: Vec2) -> &[f32] {
         }
     }
 
+    // state.frame.fill(0.0);
+
     let samples = state.samples as f32;
+    // let samples = 0.0;
     let raw_buf = state
         .frame
         .chunks(3)
@@ -309,7 +324,7 @@ pub fn trace_gpu(mut state: &mut Tracing, crv: Vec2) -> &[f32] {
     let config_buf = GpuUniformBuffer::from_slice(&FW, &[state.config]);
     let rng_buf = GpuBuffer::from_slice(&FW, &uniform);
     let output_buf = GpuBuffer::from_slice(&FW, &raw_buf);
-    let rt = PathTracing::new(&config_buf, &rng_buf, &output_buf);
+    let rt = PathTracing::new(&config_buf, &rng_buf, &output_buf, world);
 
     let mut image_buf_raw: Vec<Vec4> = vec![Vec4::ZERO; pixel_count];
     let mut image_buf: Vec<f32> = vec![0.0; pixel_count * 3];

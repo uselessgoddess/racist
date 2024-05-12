@@ -16,4 +16,6 @@ wgpu = { version = "0.19", features = ["spirv"] }
 glam = { version = "0.24", features = ["bytemuck"] }
 gpgpu = { git = "https://github.com/UpsettingBoy/gpgpu-rs" }
 
+russimp = { version = "3.2.0", features = ["prebuilt"] }
+fast_image_resize = { version = "3.0.4" }
 shared = { path = "shared" }
